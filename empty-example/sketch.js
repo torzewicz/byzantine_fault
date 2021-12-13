@@ -4,13 +4,14 @@ const numberOfGenerals = 8;
 
 const fontSize = 20;
 
-const MESSAGE_ATTACK = 'ATTACK';
-const MESSAGE_NOT_ATTACK = 'NOT_ATTACK';
+const MESSAGE_ATTACK = 1;
+const MESSAGE_NOT_ATTACK = -1;
 
 let phase = 1;
 let round = 1;
 let button;
 let king_index = undefined;
+let temperature = 10000;
 
 const connectAllGenerals = () => {
     for (let i = 0; i < numberOfGenerals; i++) {
@@ -62,22 +63,31 @@ function draw() {
             }
             round++;
         } else if (round === 2) {
-            king_index = 2;
+            king_index = Math.floor(Math.random() * (generals.length));
             generals[king_index].isKing = true;
             for (let i = 0; i < generals.length; i++) {
-                if (i != king_index) {
+                if (i !== king_index) {
                     if (generals[king_index].isTraitor) {
+                        generals[king_index].currentMessageToSend = MESSAGE_NOT_ATTACK;
                         if (generals[i].isConnected(generals[king_index])) {
                             generals[i].receiveKingMessage(MESSAGE_NOT_ATTACK);
                         }
                     } else {
+                        generals[king_index].currentMessageToSend = MESSAGE_ATTACK;
                         if (generals[i].isConnected(generals[king_index])) {
-                            generals[i].receiveKingMessage(generals[king_index].currentMessageToSend);
+                            if (generals[king_index].currentMessageToSend > 0) {
+                                generals[i].receiveKingMessage(MESSAGE_ATTACK);
+                            } else if (generals[king_index].currentMessageToSend === 0) {
+                                generals[i].receiveKingMessage(0);
+                            } else {
+                                generals[i].receiveKingMessage(MESSAGE_NOT_ATTACK);
+                            }
                         }
                     }
                 }
             }
             phase++;
+            temperature *= 0.8;
             round = 1;
         }
 
@@ -97,6 +107,8 @@ function showTexts() {
     if (generals.filter(i => i.isTraitor).length >= Math.floor((generals.length / 4))) {
         text(`Too many traitors! Number of traitors must be lower than: ${Math.floor((generals.length / 4))}`, 20, 90)
     }
+    text(`Temperature: ${Math.floor(temperature)}`, 20, 110)
+
 
     textAlign(CENTER);
     text(`Phase: ${phase}`, width / 2, 30)
@@ -153,7 +165,7 @@ class General {
 
         textSize(10);
         if (!!this.winningValue) {
-            if (this.winningValue === MESSAGE_NOT_ATTACK) {
+            if (this.winningValue <= 0) {
                 fill(255, 0, 0);
                 text(`Winning value: ${this.winningValue}`, this.message_x, this.message_y + 20);
             } else {
@@ -161,7 +173,7 @@ class General {
                 text(`Winning value: ${this.winningValue}`, this.message_x, this.message_y + 20);
             }
         }
-        if (this.currentMessageToSend === MESSAGE_NOT_ATTACK) {
+        if (this.currentMessageToSend <= 0) {
             fill(255, 0, 0);
             text(`Message to send: ${this.currentMessageToSend}`, this.message_x, this.message_y);
         } else {
@@ -190,7 +202,7 @@ class General {
 
     sendCurrentMessage() {
         for (let i = 0; i < numberOfGenerals; i++) {
-            if (generals[i].name != this.name && this.isConnected(generals[i])) {
+            if (generals[i].name !== this.name && this.isConnected(generals[i])) {
                 generals[i].receiveMessage(this.currentMessageToSend);
             }
         }
@@ -198,31 +210,32 @@ class General {
 
     receiveMessage(message) {
         this.receivedMessages.push(message);
-        if (this.receivedMessages.length == generals.length - 1) {
-            console.log(this.name, this.receivedMessages);
-            const attackOccurrences = this.receivedMessages.filter(i => i === MESSAGE_ATTACK).length;
-            const notAttackOccurrences = this.receivedMessages.filter(i => i === MESSAGE_NOT_ATTACK).length;
-            if (attackOccurrences > notAttackOccurrences) {
-                this.winningValue = MESSAGE_ATTACK;
-                this.m_value = attackOccurrences;
-            } else {
-                this.winningValue = MESSAGE_NOT_ATTACK;
-                this.m_value = notAttackOccurrences;
-            }
+        if (this.receivedMessages.length === generals.length - 1) {
+
+            const sum = this.receivedMessages.reduce((a, b) => a + b, 0);
+            const value = parseFloat((sum / this.receivedMessages.length).toFixed(2));
+
+            this.winningValue = value;
+            this.m_value = value;
+
             if (!this.isTraitor) {
                 this.currentMessageToSend = this.winningValue;
             }
+
         }
 
     }
 
     receiveKingMessage(message) {
-        if (this.m_value > Math.ceil((generals.length / 2)) + (generals.filter(i => i.isTraitor).length)) {
+
+        const condition = Math.ceil((generals.length / 2)) + (generals.filter(i => i.isTraitor).length);
+
+        if (this.m_value > (condition / generals.length - 1)) {
             this.currentMessageToSend = this.winningValue;
         } else {
             this.currentMessageToSend = message;
         }
-        console.log(this.name, this.currentMessageToSend);
+        // console.log(this.name, this.currentMessageToSend);
         this.receivedMessages = [];
     }
 
