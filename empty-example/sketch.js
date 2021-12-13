@@ -11,7 +11,13 @@ let phase = 1;
 let round = 1;
 let button;
 let king_index = undefined;
-let temperature = 10000;
+const baseTemperature = 10000;
+let temperature = baseTemperature;
+
+const nominator = 5.670374419;
+const denominator = 100000000;
+const baseEnergy = nominator * Math.pow(baseTemperature, 4) / denominator;
+let currentEnergy = baseEnergy;
 
 const connectAllGenerals = () => {
     for (let i = 0; i < numberOfGenerals; i++) {
@@ -64,6 +70,7 @@ function draw() {
             round++;
         } else if (round === 2) {
             king_index = Math.floor(Math.random() * (generals.length));
+            // king_index = 2;
             generals[king_index].isKing = true;
             for (let i = 0; i < generals.length; i++) {
                 if (i !== king_index) {
@@ -88,6 +95,7 @@ function draw() {
             }
             phase++;
             temperature *= 0.8;
+            currentEnergy = nominator * Math.pow(temperature, 4) / denominator;
             round = 1;
         }
 
@@ -107,7 +115,10 @@ function showTexts() {
     if (generals.filter(i => i.isTraitor).length >= Math.floor((generals.length / 4))) {
         text(`Too many traitors! Number of traitors must be lower than: ${Math.floor((generals.length / 4))}`, 20, 90)
     }
-    text(`Temperature: ${Math.floor(temperature)}`, 20, 110)
+    text(`Temperature: ${Math.floor(temperature)}`, 20, 110);
+    text(`Base energy: ${baseEnergy}`, 20, 130);
+    text(`Current energy: ${currentEnergy}`, 20, 150);
+    text(`Energy ratio: ${currentEnergy/baseEnergy}`, 20, 170);
 
 
     textAlign(CENTER);
@@ -233,8 +244,18 @@ class General {
         if (this.m_value > (condition / generals.length - 1)) {
             this.currentMessageToSend = this.winningValue;
         } else {
-            this.currentMessageToSend = message;
+
+            let calculatedMessage = 0;
+            const energyRatio = currentEnergy / baseEnergy;
+
+            calculatedMessage = this.winningValue * (1 - energyRatio) + message * energyRatio;
+
+            this.currentMessageToSend = calculatedMessage;
+        
         }
+        // if (!this.isTraitor) {
+        //     this.currentMessageToSend = this.winningValue;
+        // }
         // console.log(this.name, this.currentMessageToSend);
         this.receivedMessages = [];
     }
@@ -252,8 +273,6 @@ class Connection {
     }
 
     show() {
-        // const numberOfAllowedColors = 255 / (numberOfGenerals);
-        // stroke(numberOfAllowedColors * this.generalA.name, numberOfAllowedColors * this.generalA.name, numberOfAllowedColors * this.generalA.name)
         stroke(255);
         strokeWeight(3);
         line(this.generalA.x, this.generalA.y, this.generalB.x, this.generalB.y)
