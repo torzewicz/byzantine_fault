@@ -2,7 +2,7 @@ let generals = [];
 let connections = [];
 const numberOfGenerals = 8;
 
-const algorithm = 'LAMPORT' // KINGS or LAMPORT
+const algorithm = 'KINGS' // KINGS or LAMPORT
 
 const fontSize = 20;
 
@@ -296,7 +296,7 @@ class General {
     omAlgorithm(king, m, message) {
         if (m < 0) {
             this.receivedMessages.push(message);
-        } else if (m == 0) {
+        } else if (m === 0) {
             for (let i=0; i<generals.length; i++) {
                 generals[i].omAlgorithm(this, m-1, this.nextOrder(i, this.isTraitor, message));
             }
