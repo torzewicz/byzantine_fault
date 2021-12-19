@@ -2,6 +2,8 @@ let generals = [];
 let connections = [];
 const numberOfGenerals = 8;
 
+const algorithm = 'LAMPORT' // KINGS or LAMPORT
+
 const fontSize = 20;
 
 const MESSAGE_ATTACK = 1;
@@ -60,48 +62,70 @@ function draw() {
     button = createButton(`Start round ${round}`);
     button.position(width / 2 - 45, 60);
     button.mousePressed(function () {
-        if (round === 1) {
-            if (!!king_index) {
-                generals[king_index].isKing = false;
-            }
-            for (let i = 0; i < generals.length; i++) {
-                generals[i].sendCurrentMessage();
-            }
-            round++;
-        } else if (round === 2) {
-            king_index = Math.floor(Math.random() * (generals.length));
-            // king_index = 2;
-            generals[king_index].isKing = true;
-            for (let i = 0; i < generals.length; i++) {
-                if (i !== king_index) {
-                    if (generals[king_index].isTraitor) {
-                        generals[king_index].currentMessageToSend = MESSAGE_NOT_ATTACK;
-                        if (generals[i].isConnected(generals[king_index])) {
+        if (algorithm === 'KINGS') {
+            runKingsAlgorithm();
+        } else if (algorithm === 'LAMPORT') {
+            runLamportAlgorithm();
+        }
+    })
+}
+
+function runLamportAlgorithm() {
+    generals[0].omAlgorithm(generals[0], phase, generals[0].currentMessageToSend);
+
+    for (var i=0; i<generals.length; i++) {
+        var counts = {};
+        for (const value of generals[i].receivedMessages) {
+            counts[value] = counts[value] ? counts[value] + 1 : 1;
+        }
+
+        generals[i].winningValue = (counts[MESSAGE_ATTACK] > counts[MESSAGE_NOT_ATTACK])? MESSAGE_ATTACK : MESSAGE_NOT_ATTACK;
+    }
+
+    phase++;
+    temperature *= 0.8;
+    currentEnergy = nominator * Math.pow(temperature, 4) / denominator;
+}
+
+function runKingsAlgorithm() {
+    if (round === 1) {
+        if (!!king_index) {
+            generals[king_index].isKing = false;
+        }
+        for (let i = 0; i < generals.length; i++) {
+            generals[i].sendCurrentMessage();
+        }
+        round++;
+    } else if (round === 2) {
+        king_index = Math.floor(Math.random() * (generals.length));
+        // king_index = 2;
+        generals[king_index].isKing = true;
+        for (let i = 0; i < generals.length; i++) {
+            if (i !== king_index) {
+                if (generals[king_index].isTraitor) {
+                    generals[king_index].currentMessageToSend = MESSAGE_NOT_ATTACK;
+                    if (generals[i].isConnected(generals[king_index])) {
+                        generals[i].receiveKingMessage(MESSAGE_NOT_ATTACK);
+                    }
+                } else {
+                    generals[king_index].currentMessageToSend = MESSAGE_ATTACK;
+                    if (generals[i].isConnected(generals[king_index])) {
+                        if (generals[king_index].currentMessageToSend > 0) {
+                            generals[i].receiveKingMessage(MESSAGE_ATTACK);
+                        } else if (generals[king_index].currentMessageToSend === 0) {
+                            generals[i].receiveKingMessage(0);
+                        } else {
                             generals[i].receiveKingMessage(MESSAGE_NOT_ATTACK);
-                        }
-                    } else {
-                        generals[king_index].currentMessageToSend = MESSAGE_ATTACK;
-                        if (generals[i].isConnected(generals[king_index])) {
-                            if (generals[king_index].currentMessageToSend > 0) {
-                                generals[i].receiveKingMessage(MESSAGE_ATTACK);
-                            } else if (generals[king_index].currentMessageToSend === 0) {
-                                generals[i].receiveKingMessage(0);
-                            } else {
-                                generals[i].receiveKingMessage(MESSAGE_NOT_ATTACK);
-                            }
                         }
                     }
                 }
             }
-            phase++;
-            temperature *= 0.8;
-            currentEnergy = nominator * Math.pow(temperature, 4) / denominator;
-            round = 1;
         }
-
-
-    })
-
+        phase++;
+        temperature *= 0.8;
+        currentEnergy = nominator * Math.pow(temperature, 4) / denominator;
+        round = 1;
+    }
 }
 
 
@@ -251,7 +275,7 @@ class General {
             calculatedMessage = this.winningValue * (1 - energyRatio) + message * energyRatio;
 
             this.currentMessageToSend = calculatedMessage;
-        
+
         }
         // if (!this.isTraitor) {
         //     this.currentMessageToSend = this.winningValue;
@@ -260,7 +284,31 @@ class General {
         this.receivedMessages = [];
     }
 
+    //---------- USED FOR LAMPORT ALGORITHM ----------
+    nextOrder(id, isTraitor, message) {
+        if (isTraitor && id % 2 == 0) {
+            return MESSAGE_ATTACK? MESSAGE_NOT_ATTACK : MESSAGE_ATTACK;
+        }
 
+        return message;
+    }
+
+    omAlgorithm(king, m, message) {
+        if (m < 0) {
+            this.receivedMessages.push(message);
+        } else if (m == 0) {
+            for (let i=0; i<generals.length; i++) {
+                generals[i].omAlgorithm(this, m-1, this.nextOrder(i, this.isTraitor, message));
+            }
+        } else {
+            for (let i=0; i<generals.length; i++) {
+                let targetGeneral = generals[i];
+                if (!(targetGeneral.name in [this.name, king.name])) {
+                    targetGeneral.omAlgorithm(this, m-1, this.nextOrder(i, this.isTraitor, message));
+                }
+            }
+        }
+    }
 }
 
 class Connection {
@@ -286,7 +334,3 @@ class Message {
         this.isKingMessage = isKingMessage;
     }
 }
-
-
-
-
