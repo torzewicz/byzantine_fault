@@ -22,6 +22,7 @@ let temperature = baseTemperature;
 let isRunning = false;
 
 let qVoterGroup = [];
+let randomQVoterNewNeighbour;
 
 const nominator = 5.670374419;
 const denominator = 100000000;
@@ -116,17 +117,18 @@ const runQVoterAlgorithm = () => {
                 }
             }
         }
-        round++;
 
+		do {
+            randomQVoterNewNeighbour = Math.floor(Math.random() * (generals.length));
+        } while (qVoterGroup.includes(randomQVoterNewNeighbour));
+		console.log('Chosen neighbour: ', randomQVoterNewNeighbour);
+		generals[randomQVoterNewNeighbour].isKing = true;
+
+        round++;
     } else if (round === 2) {
         const qVoterGroupMessages = qVoterGroup.map(i => generals[i].currentMessageToSend);
         const allEqual = qVoterGroupMessages.every(value => value === qVoterGroupMessages[0]);
         console.log(qVoterGroup)
-
-        let randomQVoterNewNeighbour;
-        do {
-            randomQVoterNewNeighbour = Math.floor(Math.random() * (generals.length));
-        } while (qVoterGroup.includes(randomQVoterNewNeighbour));
 
         console.log('Chosen neighbour: ', randomQVoterNewNeighbour);
 
@@ -142,6 +144,7 @@ const runQVoterAlgorithm = () => {
            }
         }
 
+		generals[randomQVoterNewNeighbour].isKing = false;
         qVoterGroup.forEach(i => generals[i].assignedToQVoterGroup = false);
         qVoterGroup = [];
 
@@ -152,7 +155,7 @@ const runQVoterAlgorithm = () => {
 
 }
 
-function runLamportAlgorithm() {
+const runLamportAlgorithm = () => {
     for (let i = 0; i < generals.length; i++) {
         generals[i].receivedMessages = [];
     }
@@ -173,7 +176,7 @@ function runLamportAlgorithm() {
     currentEnergy = nominator * Math.pow(temperature, 4) / denominator;
 }
 
-function runKingsAlgorithm() {
+const runKingsAlgorithm = () => {
     if (round === 1) {
         if (!!king_index) {
             generals[king_index].isKing = false;
