@@ -2,7 +2,10 @@ let generals = [];
 let connections = [];
 const numberOfGenerals = 8;
 
-const algorithm = 'KINGS' // KINGS or LAMPORT
+let algorithm = 'KINGS'; // KINGS or LAMPORT or Q_VOTER
+
+
+const neighboursInQVoterAlgorithm = 3; // To jest Q
 
 const fontSize = 20;
 
@@ -12,9 +15,13 @@ const MESSAGE_NOT_ATTACK = -1;
 let phase = 1;
 let round = 1;
 let button;
+let select;
 let king_index = undefined;
 const baseTemperature = 10000;
 let temperature = baseTemperature;
+let isRunning = false;
+
+let qVoterGroup = [];
 
 const nominator = 5.670374419;
 const denominator = 100000000;
@@ -24,7 +31,7 @@ let currentEnergy = baseEnergy;
 const connectAllGenerals = () => {
     for (let i = 0; i < numberOfGenerals; i++) {
         for (let j = i + 1; j < numberOfGenerals; j++) {
-            if (i != j && !generals[i].isConnected(generals[j])) {
+            if (i !== j && !generals[i].isConnected(generals[j])) {
                 connections.push(new Connection(generals[i], generals[j]));
             }
         }
@@ -38,8 +45,17 @@ function setup() {
     for (let i = 0; i < numberOfGenerals; i++) {
         generals[i] = new General(i + 1);
     }
-    // Create liquid object
     connectAllGenerals();
+    select = createSelect();
+    select.position(width / 2 + 60, 60);
+    select.option('KINGS');
+    select.option('LAMPORT');
+    select.option('Q_VOTER');
+    select.changed(() => {
+        if (!isRunning) {
+            algorithm = select.value();
+        }
+    });
 }
 
 function draw() {
@@ -64,26 +80,92 @@ function draw() {
     button.mousePressed(function () {
         if (algorithm === 'KINGS') {
             runKingsAlgorithm();
+            isRunning = true;
         } else if (algorithm === 'LAMPORT') {
             runLamportAlgorithm();
+            isRunning = true;
+        } else if (algorithm === 'Q_VOTER') {
+            runQVoterAlgorithm();
+            isRunning = true;
+        } else {
+            alert('Ni')
         }
-    })
+    });
+
+}
+
+const runQVoterAlgorithm = () => {
+    if (round === 1) {
+        for (let i = 0; i < neighboursInQVoterAlgorithm;) {
+            const randomQVoterGeneral = Math.floor(Math.random() * (generals.length));
+            if (!generals[randomQVoterGeneral].assignedToQVoterGroup) {
+                if (qVoterGroup.length === 0) {
+                    qVoterGroup.push(randomQVoterGeneral);
+                    generals[randomQVoterGeneral].assignedToQVoterGroup = true;
+                    i++;
+                } else {
+                    for (let j = 0; j < qVoterGroup.length; j++) {
+                        if (generals[randomQVoterGeneral].isConnected(generals[qVoterGroup[j]])) {
+                            qVoterGroup.push(randomQVoterGeneral);
+                            generals[randomQVoterGeneral].assignedToQVoterGroup = true;
+                            i++;
+                            break;
+                        }
+
+                    }
+                }
+            }
+        }
+        round++;
+
+    } else if (round === 2) {
+        const qVoterGroupMessages = qVoterGroup.map(i => generals[i].currentMessageToSend);
+        const allEqual = qVoterGroupMessages.every(value => value === qVoterGroupMessages[0]);
+        console.log(qVoterGroup)
+
+        let randomQVoterNewNeighbour;
+        do {
+            randomQVoterNewNeighbour = Math.floor(Math.random() * (generals.length));
+        } while (qVoterGroup.includes(randomQVoterNewNeighbour));
+
+        console.log('Chosen neighbour: ', randomQVoterNewNeighbour);
+
+        if (allEqual) {
+            generals[randomQVoterNewNeighbour].winningValue = qVoterGroupMessages[0];
+            console.log('Winning value: ',  qVoterGroupMessages[0]);
+
+        } else {
+           if (generals[randomQVoterNewNeighbour].currentMessageToSend === MESSAGE_ATTACK) {
+               generals[randomQVoterNewNeighbour].winningValue = MESSAGE_NOT_ATTACK;
+           } else {
+               generals[randomQVoterNewNeighbour].winningValue = MESSAGE_ATTACK;
+           }
+        }
+
+        qVoterGroup.forEach(i => generals[i].assignedToQVoterGroup = false);
+        qVoterGroup = [];
+
+        phase++;
+        round = 1;
+    }
+
+
 }
 
 function runLamportAlgorithm() {
-    for (let i=0; i<generals.length; i++) {
+    for (let i = 0; i < generals.length; i++) {
         generals[i].receivedMessages = [];
     }
 
     generals[0].omAlgorithm(generals[0], phase, generals[0].currentMessageToSend);
 
-    for (let i=0; i<generals.length; i++) {
+    for (let i = 0; i < generals.length; i++) {
         let counts = {};
         for (const value of generals[i].receivedMessages) {
             counts[value] = counts[value] ? counts[value] + 1 : 1;
         }
 
-        generals[i].winningValue = (counts[MESSAGE_ATTACK] > counts[MESSAGE_NOT_ATTACK])? MESSAGE_ATTACK : MESSAGE_NOT_ATTACK;
+        generals[i].winningValue = (counts[MESSAGE_ATTACK] > counts[MESSAGE_NOT_ATTACK]) ? MESSAGE_ATTACK : MESSAGE_NOT_ATTACK;
     }
 
     phase++;
@@ -146,7 +228,7 @@ function showTexts() {
     text(`Temperature: ${Math.floor(temperature)}`, 20, 110);
     text(`Base energy: ${baseEnergy}`, 20, 130);
     text(`Current energy: ${currentEnergy}`, 20, 150);
-    text(`Energy ratio: ${currentEnergy/baseEnergy}`, 20, 170);
+    text(`Energy ratio: ${currentEnergy / baseEnergy}`, 20, 170);
 
 
     textAlign(CENTER);
@@ -181,11 +263,16 @@ class General {
         this.m_value = undefined;
         this.winningValue = undefined;
         this.isKing = false;
+
+        //q voter
+        this.assignedToQVoterGroup = false;
     }
 
     show() {
 
-        if (this.isTraitor) {
+        if (this.assignedToQVoterGroup) {
+            fill(255, 255, 0);
+        } else if (this.isTraitor) {
             fill(255, 0, 0);
         } else {
             fill(102, 51, 0);
@@ -290,8 +377,8 @@ class General {
 
     //---------- USED FOR LAMPORT ALGORITHM ----------
     nextOrder(id, isTraitor, message) {
-        if (isTraitor && id % 2 == 0) {
-            return MESSAGE_ATTACK? MESSAGE_NOT_ATTACK : MESSAGE_ATTACK;
+        if (isTraitor && id % 2 === 0) {
+            return MESSAGE_ATTACK ? MESSAGE_NOT_ATTACK : MESSAGE_ATTACK;
         }
 
         return message;
@@ -301,14 +388,14 @@ class General {
         if (m < 0) {
             this.receivedMessages.push(message);
         } else if (m === 0) {
-            for (let i=0; i<generals.length; i++) {
-                generals[i].omAlgorithm(this, m-1, this.nextOrder(i, this.isTraitor, message));
+            for (let i = 0; i < generals.length; i++) {
+                generals[i].omAlgorithm(this, m - 1, this.nextOrder(i, this.isTraitor, message));
             }
         } else {
-            for (let i=0; i<generals.length; i++) {
+            for (let i = 0; i < generals.length; i++) {
                 let targetGeneral = generals[i];
                 if (!(targetGeneral.name in [this.name, king.name])) {
-                    targetGeneral.omAlgorithm(this, m-1, this.nextOrder(i, this.isTraitor, message));
+                    targetGeneral.omAlgorithm(this, m - 1, this.nextOrder(i, this.isTraitor, message));
                 }
             }
         }
