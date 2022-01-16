@@ -242,8 +242,26 @@ function showTexts() {
 
 function mouseClicked() {
     for (let i = 0; i < generals.length; i++) {
-        generals[i].pressed();
+        if (generals[i].pressed()) {
+            return ;
+        }
     }
+
+    var pressedConnections = []
+    for (let i = 0; i < connections.length; i++) {
+        if (connections[i].pressed()) {
+            pressedConnections.push(i);
+        }
+    }
+
+    if (pressedConnections.length === 1) {
+        connections.splice(pressedConnections[0], 1);
+    }
+}
+
+function distanceFromLine(x1, y1, x2, y2, x3, y3) {
+    return Math.abs((y2 - y1) * x3 - (x2 - x1) * y3 + x2 * y1 - y2 * x1) /
+        Math.sqrt(Math.pow(y2 - y1, 2) + Math.pow(x2 - x1, 2));
 }
 
 class General {
@@ -326,7 +344,11 @@ class General {
         if (dist(this.x, this.y, mouseX, mouseY) < 20) {
             this.isTraitor = !this.isTraitor;
             this.currentMessageToSend = MESSAGE_ATTACK ? MESSAGE_NOT_ATTACK : MESSAGE_ATTACK;
+
+            return true;
         }
+
+        return false;
     }
 
     sendCurrentMessage() {
@@ -420,6 +442,9 @@ class Connection {
         line(this.generalA.x, this.generalA.y, this.generalB.x, this.generalB.y)
     }
 
+    pressed() {
+        return distanceFromLine(this.generalA.x, this.generalA.y, this.generalB.x, this.generalB.y, mouseX, mouseY) < 4;
+    }
 }
 
 class Message {
