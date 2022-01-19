@@ -1,6 +1,6 @@
 let generals = [];
 let connections = [];
-const numberOfGenerals = 8;
+let numberOfGenerals = 8;
 
 let algorithm = 'KINGS'; // KINGS or LAMPORT or Q_VOTER
 
@@ -16,6 +16,7 @@ let phase = 1;
 let round = 1;
 let button;
 let select;
+let numberInput;
 let king_index = undefined;
 const baseTemperature = 10000;
 let temperature = baseTemperature;
@@ -57,6 +58,10 @@ function setup() {
             algorithm = select.value();
         }
     });
+    numberInput = createInput(numberOfGenerals);
+    numberInput.position(width / 2 + 200, 60);
+    numberInput.size(100);
+
 }
 
 function draw() {
@@ -92,6 +97,16 @@ function draw() {
             alert('Ni')
         }
     });
+    numberInput.input(() => {
+        numberOfGenerals = numberInput.value();
+        generals = [];
+        connections = [];
+        for (let i = 0; i < numberOfGenerals; i++) {
+            generals[i] = new General(i + 1);
+        }
+        connectAllGenerals();
+
+    })
 
 }
 
@@ -118,11 +133,11 @@ const runQVoterAlgorithm = () => {
             }
         }
 
-		do {
+        do {
             randomQVoterNewNeighbour = Math.floor(Math.random() * (generals.length));
         } while (qVoterGroup.includes(randomQVoterNewNeighbour));
-		console.log('Chosen neighbour: ', randomQVoterNewNeighbour);
-		generals[randomQVoterNewNeighbour].isKing = true;
+        console.log('Chosen neighbour: ', randomQVoterNewNeighbour);
+        generals[randomQVoterNewNeighbour].isKing = true;
 
         round++;
     } else if (round === 2) {
@@ -134,17 +149,17 @@ const runQVoterAlgorithm = () => {
 
         if (allEqual) {
             generals[randomQVoterNewNeighbour].winningValue = qVoterGroupMessages[0];
-            console.log('Winning value: ',  qVoterGroupMessages[0]);
+            console.log('Winning value: ', qVoterGroupMessages[0]);
 
         } else {
-           if (generals[randomQVoterNewNeighbour].currentMessageToSend === MESSAGE_ATTACK) {
-               generals[randomQVoterNewNeighbour].winningValue = MESSAGE_NOT_ATTACK;
-           } else {
-               generals[randomQVoterNewNeighbour].winningValue = MESSAGE_ATTACK;
-           }
+            if (generals[randomQVoterNewNeighbour].currentMessageToSend === MESSAGE_ATTACK) {
+                generals[randomQVoterNewNeighbour].winningValue = MESSAGE_NOT_ATTACK;
+            } else {
+                generals[randomQVoterNewNeighbour].winningValue = MESSAGE_ATTACK;
+            }
         }
 
-		generals[randomQVoterNewNeighbour].isKing = false;
+        generals[randomQVoterNewNeighbour].isKing = false;
         qVoterGroup.forEach(i => generals[i].assignedToQVoterGroup = false);
         qVoterGroup = [];
 
@@ -242,8 +257,25 @@ function showTexts() {
 
 function mouseClicked() {
     for (let i = 0; i < generals.length; i++) {
-        generals[i].pressed();
+        if (generals[i].pressed()) {
+            return;
+        }
     }
+
+    var pressedConnections = []
+    for (let i = 0; i < connections.length; i++) {
+        if (connections[i].pressed()) {
+            pressedConnections.push(i);
+        }
+    }
+
+    if (pressedConnections.length === 1) {
+        connections.splice(pressedConnections[0], 1);
+    }
+}
+
+function distanceFromLine(x1, y1, x2, y2, x3, y3) {
+    return Math.abs((y2 - y1) * x3 - (x2 - x1) * y3 + x2 * y1 - y2 * x1) / Math.sqrt(Math.pow(y2 - y1, 2) + Math.pow(x2 - x1, 2));
 }
 
 class General {
@@ -309,6 +341,10 @@ class General {
             fill(0, 153, 51)
             text(`Message to send: ${this.currentMessageToSend}`, this.message_x, this.message_y);
         }
+
+        fill(255,255,255)
+        text(`Number of connections: ${this.getNumberOfConnections()}`, this.message_x, this.message_y + 40);
+
         fill(0);
     }
 
@@ -322,11 +358,25 @@ class General {
         return connected;
     }
 
+    getNumberOfConnections() {
+        let numberOfConnections = 0;
+        for (let i = 0; i < connections.length; i++) {
+            if (connections[i].connectionName.some((name) => name.includes(this.name))) {
+                numberOfConnections++;
+            }
+        }
+        return numberOfConnections;
+    }
+
     pressed() {
         if (dist(this.x, this.y, mouseX, mouseY) < 20) {
             this.isTraitor = !this.isTraitor;
             this.currentMessageToSend = MESSAGE_ATTACK ? MESSAGE_NOT_ATTACK : MESSAGE_ATTACK;
+
+            return true;
         }
+
+        return false;
     }
 
     sendCurrentMessage() {
@@ -339,15 +389,20 @@ class General {
 
     receiveMessage(message) {
         this.receivedMessages.push(message);
-        if (this.receivedMessages.length === generals.length - 1) {
-
+        if (this.receivedMessages.length === this.getNumberOfConnections()) {
+            console.log("recived")
             const sum = this.receivedMessages.reduce((a, b) => a + b, 0);
+            console.log("Sum: " + sum)
             const value = parseFloat((sum / this.receivedMessages.length).toFixed(2));
+            console.log("value: " + value)
+
 
             this.winningValue = value;
             this.m_value = value;
 
             if (!this.isTraitor) {
+                console.log("message to send: ", this.winningValue)
+
                 this.currentMessageToSend = this.winningValue;
             }
 
@@ -420,6 +475,9 @@ class Connection {
         line(this.generalA.x, this.generalA.y, this.generalB.x, this.generalB.y)
     }
 
+    pressed() {
+        return distanceFromLine(this.generalA.x, this.generalA.y, this.generalB.x, this.generalB.y, mouseX, mouseY) < 4;
+    }
 }
 
 class Message {
